@@ -24,7 +24,9 @@ jobs:
       - name: Sync web assets
         run: npx cap sync ios
 
-      - name: Build app (ad-hoc signed)
+      # 不签名构建：CI 无开发者证书，产出未签名 App，
+      # 之后由 AltStore 用用户 Apple ID 现场签名安装
+      - name: Build app (unsigned)
         run: |
           cd ios/App
           xcodebuild \
@@ -32,17 +34,17 @@ jobs:
             -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath ../../build/App.xcarchive \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="-" \
+            -derivedDataPath ../../build \
+            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=YES \
-            archive
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_STYLE=Manual \
+            build
 
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -r build/App.xcarchive/Products/Applications/App.app Payload/
+          cp -r build/Build/Products/Release-iphoneos/App.app Payload/
           zip -r DevOS.ipa Payload/
           ls -lh DevOS.ipa
 
