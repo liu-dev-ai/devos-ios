@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DevOS">
+<meta name="theme-color" content="#0b0b12">
+<meta name="description" content="DevOS 手机版 - 个人学习与工作助手">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+<title>DevOS</title>
+<style>
+  :root{
+    --bg:#0b0b12; --card:#16161f; --card2:#1e1e2a; --line:rgba(255,255,255,.08);
+    --ink:#f2f2f7; --ink2:#a1a1b2; --ink3:#6b6b7c;
+    --brand:#0a84ff; --brand2:#5e5ce6; --green:#30d158; --red:#ff453a; --amber:#ffd60a;
+    --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Helvetica Neue",sans-serif;
+    font-size:15px; -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .app{height:100%;display:flex;flex-direction:column;padding-top:var(--safe-t)}
+  /* ===== 顶部 ===== */
+  .head{
+    display:flex;align-items:center;gap:10px;padding:14px 18px 10px;
+    backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);background:rgba(11,11,18,.8);
+    border-bottom:1px solid var(--line); position:relative; z-index:10;
+  }
+  .head .logo{
+    width:34px;height:34px;border-radius:9px;flex:none;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:#fff;
+  }
+  .head .tt{font-size:17px;font-weight:700;letter-spacing:-.02em}
+  .head .sub{font-size:11px;color:var(--ink3);margin-top:1px}
+  .head .pill{
+    margin-left:auto;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:99px;
+    background:var(--card2);color:var(--ink2);
+  }
+  .head .pill.on{background:rgba(48,209,88,.15);color:var(--green)}
+  .head .pill.off{background:rgba(255,69,58,.15);color:var(--red)}
+  /* ===== 内容滚动区 ===== */
+  .body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px calc(86px + var(--safe-b))}
+  .page{display:none}
+  .page.on{display:block}
+  /* ===== 底部 Tab ===== */
+  .tabbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:20;
+    display:flex;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    background:rgba(16,16,24,.9);border-top:1px solid var(--line);
+    padding-bottom:var(--safe-b);
+  }
+  .tab{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:9px 0 7px;color:var(--ink3);font-size:10.5px;font-weight:600;border:none;background:none;
+    transition:color .15s;
+  }
+  .tab svg{width:23px;height:23px}
+  .tab.on{color:var(--brand)}
+  /* ===== 卡片 ===== */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+  .card h3{font-size:14px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:none}
+  .btn{
+    display:flex;align-items:center;justify-content:center;gap:6px;width:100%;
+    padding:13px;border:none;border-radius:13px;font-size:15px;font-weight:600;
+    background:var(--brand);color:#fff;cursor:pointer;transition:opacity .15s,transform .05s;
+  }
+  .btn:active{transform:scale(.98)}
+  .btn.green{background:var(--green)}
+  .btn.ghost{background:var(--card2);color:var(--ink)}
+  .btn:disabled{opacity:.5}
+  .inp{
+    width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;
+    background:var(--card2);color:var(--ink);font-size:15px;outline:none;
+  }
+  .inp:focus{border-color:var(--brand)}
+  label.lb{display:block;font-size:12px;color:var(--ink2);margin:10px 0 6px;font-weight:600}
+  .hint{font-size:11.5px;color:var(--ink3);line-height:1.6;margin-top:8px}
+  .stat{font-size:12.5px;min-height:18px;margin-top:8px;text-align:center}
+  .stat.err{color:var(--red)} .stat.ok{color:var(--green)}
+  .empty{text-align:center;color:var(--ink3);font-size:13px;padding:22px 0}
+  /* 天气 */
+  .wx-hero{background:linear-gradient(135deg,#1a2a4a,#16204a 60%,#241b4a);border:1px solid var(--line);border-radius:20px;padding:22px;margin-bottom:14px;position:relative;overflow:hidden}
+  .wx-hero .deg{font-size:54px;font-weight:800;letter-spacing:-.03em}
+  .wx-hero .desc{font-size:14px;color:var(--ink2);margin-top:2px}
+  .wx-hero .meta{font-size:11.5px;color:var(--ink2);margin-top:10px;display:flex;gap:12px;flex-wrap:wrap}
+  .wx-hero .city{font-size:13px;color:var(--ink2);margin-bottom:6px}
+  .wx-btns{display:flex;gap:8px;margin-top:12px}
+  .wx-btns .btn{font-size:12.5px;padding:9px}
+  /* 待办 */
+  .todo-add{display:flex;gap:8px;margin-bottom:4px}
+  .todo-add .inp{flex:1}
+  .todo-add .btn{width:auto;padding:0 18px}
+  .todo{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line)}
+  .todo:last-child{border-bottom:none}
+  .todo .ck{
+    width:22px;height:22px;border-radius:50%;border:2px solid var(--ink3);flex:none;
+    display:flex;align-items:center;justify-content:center;color:transparent;font-size:13px;
+  }
+  .todo.done .ck{background:var(--green);border-color:var(--green);color:#fff}
+  .todo.done .tx{color:var(--ink3);text-decoration:line-through}
+  .todo .tx{flex:1;font-size:14.5px;line-height:1.4}
+  .todo .pri{width:8px;height:8px;border-radius:50%;flex:none}
+  .todo .del{border:none;background:none;color:var(--ink3);font-size:16px;padding:4px 8px}
+  .seg{display:flex;gap:6px;margin-bottom:12px}
+  .seg button{
+    flex:1;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--card2);
+    color:var(--ink2);font-size:12.5px;font-weight:600;
+  }
+  .seg button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  /* 课程 */
+  .course-day{font-size:12px;font-weight:700;color:var(--brand);margin:10px 0 4px}
+  .course-item{display:flex;gap:10px;align-items:center;padding:10px;background:var(--card2);border-radius:12px;margin-bottom:8px}
+  .course-item .time{font-size:12px;color:var(--ink2);width:88px;flex:none}
+  .course-item .nm{flex:1;font-size:14px;font-weight:600}
+  .course-item .loc{font-size:11px;color:var(--ink3);margin-top:2px}
+  .course-item .del{border:none;background:none;color:var(--ink3);font-size:15px}
+  /* 计划 */
+  .plan-add{display:flex;gap:8px}
+  .plan-add .inp{flex:1}
+  .plan{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line)}
+  .plan:last-child{border-bottom:none}
+  .plan .ck{width:22px;height:22px;border-radius:8px;border:2px solid var(--ink3);flex:none;display:flex;align-items:center;justify-content:center;color:transparent}
+  .plan.done .ck{background:var(--green);border-color:var(--green);color:#fff}
+  .plan.done .tx{color:var(--ink3);text-decoration:line-through}
+  .plan .tx{flex:1;font-size:14.5px}
+  .plan .del{border:none;background:none;color:var(--ink3);font-size:15px;padding:4px 8px}
+  /* AI 聊天 */
+  .chat-box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;min-height:220px;max-height:52vh;overflow-y:auto;margin-bottom:10px}
+  .msg{margin-bottom:10px;display:flex;flex-direction:column}
+  .msg .b{
+    max-width:82%;padding:10px 13px;border-radius:16px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word;
+  }
+  .msg.ai{align-items:flex-start}
+  .msg.ai .b{background:var(--card2);border-bottom-left-radius:4px}
+  .msg.me{align-items:flex-end}
+  .msg.me .b{background:var(--brand);border-bottom-right-radius:4px}
+  .chat-in{display:flex;gap:8px;align-items:flex-end}
+  .chat-in textarea{
+    flex:1;resize:none;max-height:100px;padding:11px 13px;border:1px solid var(--line);border-radius:13px;
+    background:var(--card2);color:var(--ink);font-size:15px;outline:none;line-height:1.4;font-family:inherit;
+  }
+  .chat-in .btn{width:44px;height:44px;padding:0;border-radius:13px;flex:none}
+  .chat-in .btn svg{width:20px;height:20px}
+  .chats-tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;scrollbar-width:none}
+  .chats-tabs::-webkit-scrollbar{display:none}
+  .chats-tabs button{
+    flex:none;padding:7px 14px;border-radius:99px;border:1px solid var(--line);background:var(--card2);
+    color:var(--ink2);font-size:12px;font-weight:600;
+  }
+  .chats-tabs button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .chats-tabs .new{border-style:dashed;color:var(--brand)}
+  /* 我的 */
+  .me-row{display:flex;align-items:center;gap:12px;padding:12px 0}
+  .avatar{
+    width:46px;height:46px;border-radius:50%;flex:none;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));
+    display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;
+  }
+  .me-row .nm{font-size:16px;font-weight:700}
+  .me-row .sub{font-size:12px;color:var(--ink3);margin-top:2px}
+  .link-row{display:flex;align-items:center;gap:10px;padding:13px 2px;border-bottom:1px solid var(--line);color:var(--ink);text-decoration:none;font-size:14.5px}
+  .link-row:last-child{border-bottom:none}
+  .link-row .ic{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+  .link-row .ar{margin-left:auto;color:var(--ink3);font-size:16px}
+  /* 登录遮罩 */
+  .login-mask{
+    position:fixed;inset:0;z-index:100;background:var(--bg);padding:calc(70px + var(--safe-t)) 24px 24px;
+    display:flex;flex-direction:column;align-items:center;overflow-y:auto;
+  }
+  .login-mask .big-logo{
+    width:74px;height:74px;border-radius:20px;margin-bottom:16px;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));
+    display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800;color:#fff;
+  }
+  .login-mask h2{font-size:21px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+  .login-mask .sub{font-size:13px;color:var(--ink2);margin-bottom:26px;text-align:center;line-height:1.6}
+  .login-mask .card{width:100%;max-width:360px;padding:20px}
+  .forgot-link{text-align:center;font-size:12.5px;color:var(--brand);margin-top:12px}
+  /* 弹窗 */
+  .sheet{
+    position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.55);display:none;
+    align-items:flex-end;justify-content:center;
+  }
+  .sheet.on{display:flex}
+  .sheet .box{
+    width:100%;max-width:460px;background:var(--card);border-radius:20px 20px 0 0;
+    padding:18px 18px calc(20px + var(--safe-b));
+  }
+  .sheet .box h3{font-size:15px;font-weight:700;margin-bottom:12px}
+  .sheet .row-btn{width:100%;padding:13px;border:none;background:none;color:var(--ink);font-size:15px;text-align:left;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 顶部 -->
+  <div class="head">
+    <div class="logo">D</div>
+    <div>
+      <div class="tt" id="pageTitle">首页</div>
+      <div class="sub" id="pageSub">DevOS 手机版</div>
+    </div>
+    <span class="pill" id="netPill">检测中…</span>
+  </div>
+
+  <!-- 内容 -->
+  <div class="body">
+
+    <!-- 首页 -->
+    <div class="page on" id="pg-home">
+      <div class="wx-hero" id="wxHero">
+        <div class="city">定位中…</div>
+        <div class="deg">--°</div>
+        <div class="desc">正在获取天气</div>
+        <div class="meta" id="wxMeta"></div>
+        <div class="wx-btns">
+          <button class="btn ghost" onclick="App.locate()">📍 IP 定位</button>
+          <button class="btn ghost" onclick="App.weather()">🔄 刷新</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>快捷入口</h3>
+        <a class="link-row" href="javascript:void(0)" onclick="App.go('todo')">
+          <span class="ic" style="background:rgba(10,132,255,.15)">📋</span> 待办事项 <span class="ar">›</span>
+        </a>
+        <a class="link-row" href="javascript:void(0)" onclick="App.go('course')">
+          <span class="ic" style="background:rgba(94,92,230,.15)">📚</span> 课程安排 <span class="ar">›</span>
+        </a>
+        <a class="link-row" href="javascript:void(0)" onclick="App.go('plan')">
+          <span class="ic" style="background:rgba(48,209,88,.15)">🎯</span> 每月计划 <span class="ar">›</span>
+        </a>
+        <a class="link-row" href="javascript:void(0)" onclick="App.go('ai')">
+          <span class="ic" style="background:rgba(255,159,10,.15)">🤖</span> AI 对话 <span class="ar">›</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- 待办 -->
+    <div class="page" id="pg-todo">
+      <div class="card">
+        <h3>📋 待办事项</h3>
+        <div class="todo-add">
+          <input class="inp" id="todoInp" placeholder="添加待办…">
+          <button class="btn" onclick="App.addTodo()">添加</button>
+        </div>
+        <div class="seg" id="todoFilter">
+          <button data-f="all" class="on">全部</button>
+          <button data-f="today">今天</button>
+          <button data-f="done">已完成</button>
+        </div>
+        <div id="todoList"></div>
+      </div>
+    </div>
+
+    <!-- 课程 -->
+    <div class="page" id="pg-course">
+      <div class="card">
+        <h3>📚 课程安排</h3>
+        <button class="btn ghost" onclick="App.openSheet('courseSheet')">＋ 添加课程</button>
+        <div id="courseList"></div>
+      </div>
+    </div>
+
+    <!-- 计划 -->
+    <div class="page" id="pg-plan">
+      <div class="card">
+        <h3>🎯 每月计划 <span id="planMonth" style="font-size:12px;color:var(--ink2)"></span></h3>
+        <div class="plan-add">
+          <input class="inp" id="planInp" placeholder="新计划…">
+          <button class="btn" onclick="App.addPlan()">添加</button>
+        </div>
+        <div id="planList"></div>
+      </div>
+    </div>
+
+    <!-- AI -->
+    <div class="page" id="pg-ai">
+      <div class="card" style="padding:12px">
+        <div class="chats-tabs" id="chatTabs"></div>
+        <div class="chat-box" id="chatBox"><div class="empty" id="chatEmpty">输入问题开始对话 ✨</div></div>
+        <div class="chat-in">
+          <textarea id="aiInp" rows="1" placeholder="输入问题…"></textarea>
+          <button class="btn" id="aiSend" onclick="App.send()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 我的 -->
+    <div class="page" id="pg-me">
+      <div class="card">
+        <div class="me-row">
+          <div class="avatar" id="meAvatar">D</div>
+          <div>
+            <div class="nm" id="meName">未登录</div>
+            <div class="sub" id="meSub">本地账号</div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="padding:6px 16px">
+        <a class="link-row" href="javascript:void(0)" id="setLink">
+          <span class="ic" style="background:rgba(10,132,255,.15)">⚙️</span> 设置（API Key / 城市） <span class="ar">›</span>
+        </a>
+        <a class="link-row" href="javascript:void(0)" onclick="App.openSheet('wxSheet')">
+          <span class="ic" style="background:rgba(7,193,96,.15)">💬</span> 登录微信网页版 <span class="ar">›</span>
+        </a>
+        <a class="link-row" href="javascript:void(0)" onclick="App.logout()">
+          <span class="ic" style="background:rgba(255,69,58,.15)">🚪</span> 退出登录 <span class="ar">›</span>
+        </a>
+      </div>
+      <p class="hint" style="text-align:center">DevOS Mobile · 数据保存在本机</p>
+    </div>
+
+  </div>
+
+  <!-- 底部 Tab -->
+  <div class="tabbar">
+    <button class="tab on" data-pg="home" onclick="App.go('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1Z"/></svg>
+      首页
+    </button>
+    <button class="tab" data-pg="todo" onclick="App.go('todo')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      待办
+    </button>
+    <button class="tab" data-pg="course" onclick="App.go('course')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      课程
+    </button>
+    <button class="tab" data-pg="ai" onclick="App.go('ai')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>
+      AI
+    </button>
+    <button class="tab" data-pg="me" onclick="App.go('me')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      我的
+    </button>
+  </div>
+
+  <!-- 登录遮罩 -->
+  <div class="login-mask" id="loginMask">
+    <div class="big-logo">D</div>
+    <h2 id="loginTitle">欢迎使用 DevOS</h2>
+    <p class="sub" id="loginSub">首次使用请设置密码</p>
+    <div class="card">
+      <div id="loginUserField">
+        <label class="lb">用户名（可选）</label>
+        <input class="inp" id="loginUser" placeholder="给设备起个名字">
+      </div>
+      <label class="lb">密码</label>
+      <input class="inp" id="loginPass" type="password" placeholder="至少 4 位">
+      <div id="loginPass2Field" style="display:none">
+        <label class="lb">确认密码</label>
+        <input class="inp" id="loginPass2" type="password" placeholder="再次输入">
+      </div>
+      <div id="loginSecQField" style="display:none">
+        <label class="lb">安全问题（用于找回密码）</label>
+        <input class="inp" id="loginSecQ" placeholder="如：我的第一所学校是？">
+      </div>
+      <div id="loginSecAField" style="display:none">
+        <label class="lb">安全答案</label>
+        <input class="inp" id="loginSecA" placeholder="答案">
+      </div>
+      <div id="loginForgotField" style="display:none">
+        <label class="lb">安全问题</label>
+        <input class="inp" id="forgotQ" disabled>
+        <label class="lb">答案</label>
+        <input class="inp" id="forgotA" placeholder="你的答案">
+        <label class="lb">新密码</label>
+        <input class="inp" id="forgotNew" type="password" placeholder="至少 4 位">
+      </div>
+      <button class="btn" id="loginBtn" style="margin-top:16px" onclick="App.login()">创建并登录</button>
+      <div class="stat" id="loginStat"></div>
+      <div class="forgot-link" id="forgotLink"><a href="javascript:void(0)" onclick="App.forgot()">忘记密码？</a></div>
+    </div>
+  </div>
+
+  <!-- 添加课程弹层 -->
+  <div class="sheet" id="courseSheet" onclick="if(event.target===this)App.closeSheet('courseSheet')">
+    <div class="box">
+      <h3>添加课程</h3>
+      <label class="lb">课程名称</label>
+      <input class="inp" id="cName" placeholder="高等数学">
+      <label class="lb">星期</label>
+      <div class="seg" id="cDay">
+        <button data-d="1" class="on">一</button><button data-d="2">二</button><button data-d="3">三</button>
+        <button data-d="4">四</button><button data-d="5">五</button><button data-d="6">六</button><button data-d="7">日</button>
+      </div>
+      <label class="lb">时间</label>
+      <input class="inp" id="cTime" placeholder="08:00 - 09:40">
+      <label class="lb">地点</label>
+      <input class="inp" id="cLoc" placeholder="教学楼 A101">
+      <button class="btn" style="margin-top:16px" onclick="App.addCourse()">保存课程</button>
+    </div>
+  </div>
+
+  <!-- 设置弹层 -->
+  <div class="sheet" id="setSheet" onclick="if(event.target===this)App.closeSheet('setSheet')">
+    <div class="box">
+      <h3>设置</h3>
+      <label class="lb">API Key（AI 对话用）</label>
+      <input class="inp" id="sKey" placeholder="sk-...">
+      <label class="lb">API 地址</label>
+      <input class="inp" id="sBase" placeholder="https://api.deepseek.com/v1">
+      <label class="lb">模型</label>
+      <input class="inp" id="sModel" placeholder="deepseek-chat">
+      <label class="lb">城市（天气用）</label>
+      <input class="inp" id="sCity" placeholder="北京">
+      <button class="btn" style="margin-top:16px" onclick="App.saveSet()">保存设置</button>
+      <div class="stat" id="setStat"></div>
+    </div>
+  </div>
+
+  <!-- 微信网页版弹层 -->
+  <div class="sheet" id="wxSheet" onclick="if(event.target===this)App.closeSheet('wxSheet')">
+    <div class="box">
+      <h3>💬 微信网页版</h3>
+      <p class="hint">点击打开微信官方网页版（wx.qq.com），用手机微信扫码后即可收发消息。这是"使用微信"，与 DevOS 登录无关。</p>
+      <button class="btn" style="margin-top:14px" onclick="App.openWx()">打开微信网页版</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+/* ============ 数据层（localStorage） ============ */
+const DB = {
+  get(k, fb){ try{ const v = JSON.parse(localStorage.getItem('devos_' + k)); return v === null ? (fb ?? null) : v; }catch{ return fb ?? null; } },
+  set(k, v){ localStorage.setItem('devos_' + k, JSON.stringify(v)); }
+};
+
+/* ============ 工具 ============ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const DAYS = ['','周一','周二','周三','周四','周五','周六','周日'];
+
+/* 密码哈希（SHA-256 + 随机盐，不存明文） */
+async function sha256hex(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function hashPass(pw, salt){ return sha256hex(salt + '::' + pw + '::devos'); }
+
+/* ============ 主应用 ============ */
+const App = {
+  tab: 'home',
+  chats: null,
+  chatIdx: 0,
+  sending: false,
+
+  /* ----- 页面切换 ----- */
+  go(tab){
+    this.tab = tab;
+    const T = { home:['首页','DevOS 手机版'], todo:['待办事项','本地保存'], course:['课程安排','每周课程表'],
+                plan:['每月计划','月度目标'], ai:['AI 对话','流式输出'], me:['我的','本地账号'] };
+    $('pageTitle').textContent = T[tab][0];
+    $('pageSub').textContent = T[tab][1];
+    document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'pg-' + tab));
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.pg === tab));
+    if (tab === 'home') this.weather();
+    if (tab === 'todo') this.renderTodos();
+    if (tab === 'course') this.renderCourses();
+    if (tab === 'plan') this.renderPlans();
+    if (tab === 'ai') this.renderChats();
+    if (tab === 'me') this.renderMe();
+  },
+
+  /* ----- 弹层 ----- */
+  openSheet(id){ $(id).classList.add('on'); },
+  closeSheet(id){ $(id).classList.remove('on'); },
+
+  /* ================= 登录 ================= */
+  async init(){
+    document.querySelectorAll('#cDay button').forEach(b => b.onclick = () => {
+      document.querySelectorAll('#cDay button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    });
+    document.querySelectorAll('#todoFilter button').forEach(b => b.onclick = () => {
+      document.querySelectorAll('#todoFilter button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      this.renderTodos();
+    });
+    this.chats = DB.get('chats', {});
+    $('setLink').addEventListener('click', () => this.openSet());
+    await this.checkLogin();
+    this.checkNet();
+    setInterval(() => this.checkNet(), 60000);
+  },
+
+  async checkLogin(){
+    const a = DB.get('auth', null);
+    if (!a){
+      $('loginMask').style.display = 'flex';
+      $('loginTitle').textContent = '首次使用';
+      $('loginSub').textContent = '设置一个密码，数据保存在本机';
+      $('loginUserField').style.display = 'block';
+      $('loginPass2Field').style.display = 'block';
+      $('loginSecQField').style.display = 'block';
+      $('loginSecAField').style.display = 'block';
+      $('loginForgotField').style.display = 'none';
+      $('forgotLink').style.display = 'none';
+      $('loginBtn').textContent = '创建并登录';
+    } else if (!a.at){
+      $('loginMask').style.display = 'flex';
+      $('loginTitle').textContent = a.username ? '欢迎回来，' + a.username : '欢迎回来';
+      $('loginSub').textContent = '输入密码进入 DevOS';
+      $('loginUserField').style.display = 'none';
+      $('loginPass2Field').style.display = 'none';
+      $('loginSecQField').style.display = 'none';
+      $('loginSecAField').style.display = 'none';
+      $('loginForgotField').style.display = 'none';
+      $('forgotLink').style.display = 'block';
+      $('loginBtn').textContent = '登录';
+    } else {
+      $('loginMask').style.display = 'none';
+      this.renderMe();
+    }
+  },
+
+  async login(){
+    const stat = $('loginStat');
+    const a = DB.get('auth', null);
+    stat.textContent = '处理中…'; stat.className = 'stat';
+    try{
+      const pass = $('loginPass').value;
+      if (!a){
+        if (pass.length < 4) throw new Error('密码至少 4 位');
+        if (pass !== $('loginPass2').value) throw new Error('两次密码不一致');
+        const q = $('loginSecQ').value.trim(), ans = $('loginSecA').value.trim();
+        if (!q || !ans) throw new Error('请填写安全问题及答案');
+        const salt = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        DB.set('auth', { username: $('loginUser').value.trim() || '用户', salt, hash: await hashPass(pass, salt), q, ans, at: Date.now() });
+      } else {
+        if (!pass) throw new Error('请输入密码');
+        const h = await hashPass(pass, a.salt);
+        if (h !== a.hash) throw new Error('密码错误');
+        a.at = Date.now(); DB.set('auth', a);
+      }
+      $('loginPass').value = '';
+      $('loginMask').style.display = 'none';
+      this.renderMe();
+    }catch(e){ stat.textContent = e.message; stat.className = 'stat err'; }
+  },
+
+  async forgot(){
+    const stat = $('loginStat');
+    const f = $('loginForgotField');
+    const a = DB.get('auth', null);
+    if (!a) { stat.textContent = '尚未设置账号'; stat.className = 'stat err'; return; }
+    if (f.style.display === 'none'){
+      if (!a.q) { stat.textContent = '未设置安全问题，无法找回'; stat.className = 'stat err'; return; }
+      f.style.display = 'block';
+      $('forgotQ').value = a.q;
+      $('loginBtn').textContent = '重置密码';
+      stat.textContent = ''; stat.className = 'stat';
+      return;
+    }
+    try{
+      if ($('forgotA').value.trim().toLowerCase() !== String(a.ans).trim().toLowerCase()) throw new Error('答案错误');
+      const np = $('forgotNew').value;
+      if (np.length < 4) throw new Error('新密码至少 4 位');
+      a.salt = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      a.hash = await hashPass(np, a.salt); a.at = 0;
+      DB.set('auth', a);
+      $('loginPass').value = ''; $('forgotNew').value = ''; $('forgotA').value = '';
+      f.style.display = 'none';
+      $('loginBtn').textContent = '登录';
+      $('loginTitle').textContent = '密码已重置';
+      stat.textContent = '✓ 请用新密码登录'; stat.className = 'stat ok';
+      this.checkLogin();
+    }catch(e){ stat.textContent = e.message; stat.className = 'stat err'; }
+  },
+
+  logout(){
+    const a = DB.get('auth', null);
+    if (a){ a.at = 0; DB.set('auth', a); }
+    this.checkLogin();
+  },
+
+  renderMe(){
+    const a = DB.get('auth', null);
+    $('meName').textContent = a?.username || '未登录';
+    $('meSub').textContent = a?.at ? '已登录 · 本地账号' : '未登录';
+    $('meAvatar').textContent = (a?.username || 'D').slice(0,1).toUpperCase();
+  },
+
+  /* ================= 待办 ================= */
+  renderTodos(){
+    const todos = DB.get('todos', []);
+    const f = document.querySelector('#todoFilter button.on').dataset.f;
+    const list = $('todoList');
+    const todayStr = today();
+    const show = todos.filter(t => {
+      if (f === 'done') return t.done;
+      if (f === 'today') return !t.done && t.date === todayStr;
+      return !t.done;
+    });
+    if (!show.length){ list.innerHTML = '<div class="empty">暂无待办</div>'; return; }
+    list.innerHTML = show.map((t,i) => `
+      <div class="todo ${t.done?'done':''}">
+        <div class="ck" onclick="App.toggleTodo(${i})">✓</div>
+        <span class="tx">${esc(t.text)}<br><small style="color:var(--ink3);font-size:11px">${esc(t.date)}</small></span>
+        <span class="pri" style="background:${t.pri==='高'?'var(--red)':t.pri==='中'?'var(--amber)':'var(--ink3)'}"></span>
+        <button class="del" onclick="App.delTodo(${i})">✕</button>
+      </div>`).join('');
+  },
+  addTodo(){
+    const v = $('todoInp').value.trim();
+    if (!v) return;
+    const todos = DB.get('todos', []);
+    todos.unshift({ text: v, date: today(), done: false, pri: '中' });
+    DB.set('todos', todos);
+    $('todoInp').value = '';
+    this.renderTodos();
+  },
+  toggleTodo(i){
+    const todos = DB.get('todos', []);
+    todos[i].done = !todos[i].done;
+    DB.set('todos', todos); this.renderTodos();
+  },
+  delTodo(i){
+    const todos = DB.get('todos', []);
+    todos.splice(i,1); DB.set('todos', todos); this.renderTodos();
+  },
+
+  /* ================= 课程 ================= */
+  renderCourses(){
+    const courses = DB.get('courses', []);
+    const list = $('courseList');
+    if (!courses.length){ list.innerHTML = '<div class="empty">暂无课程，点击上方按钮添加</div>'; return; }
+    const byDay = {};
+    courses.forEach((c,i) => { (byDay[c.day] = byDay[c.day] || []).push({...c, i}); });
+    let html = '';
+    for (let d = 1; d <= 7; d++){
+      if (!byDay[d]) continue;
+      html += `<div class="course-day">${DAYS[d]}</div>`;
+      byDay[d].forEach(c => {
+        html += `<div class="course-item">
+          <div class="time">${esc(c.time||'')}</div>
+          <div class="nm">${esc(c.name)}<div class="loc">📍 ${esc(c.loc||'')}</div></div>
+          <button class="del" onclick="App.delCourse(${c.i})">✕</button>
+        </div>`;
+      });
+    }
+    list.innerHTML = html;
+  },
+  addCourse(){
+    const name = $('cName').value.trim();
+    if (!name){ alert('请输入课程名称'); return; }
+    const day = document.querySelector('#cDay button.on').dataset.d;
+    const courses = DB.get('courses', []);
+    courses.push({ name, day: Number(day), time: $('cTime').value.trim(), loc: $('cLoc').value.trim() });
+    DB.set('courses', courses);
+    $('cName').value = ''; $('cTime').value = ''; $('cLoc').value = '';
+    this.closeSheet('courseSheet');
+    this.renderCourses();
+  },
+  delCourse(i){
+    const courses = DB.get('courses', []);
+    courses.splice(i,1); DB.set('courses', courses); this.renderCourses();
+  },
+
+  /* ================= 计划 ================= */
+  renderPlans(){
+    const plans = DB.get('plans', []);
+    const now = new Date();
+    $('planMonth').textContent = now.getFullYear() + ' 年 ' + (now.getMonth()+1) + ' 月';
+    const list = $('planList');
+    if (!plans.length){ list.innerHTML = '<div class="empty">暂无计划</div>'; return; }
+    list.innerHTML = plans.map((p,i) => `
+      <div class="plan ${p.done?'done':''}">
+        <div class="ck" onclick="App.togglePlan(${i})">✓</div>
+        <span class="tx">${esc(p.text)}</span>
+        <button class="del" onclick="App.delPlan(${i})">✕</button>
+      </div>`).join('');
+  },
+  addPlan(){
+    const v = $('planInp').value.trim();
+    if (!v) return;
+    const plans = DB.get('plans', []);
+    plans.unshift({ text: v, done: false });
+    DB.set('plans', plans);
+    $('planInp').value = '';
+    this.renderPlans();
+  },
+  togglePlan(i){
+    const plans = DB.get('plans', []);
+    plans[i].done = !plans[i].done;
+    DB.set('plans', plans); this.renderPlans();
+  },
+  delPlan(i){
+    const plans = DB.get('plans', []);
+    plans.splice(i,1); DB.set('plans', plans); this.renderPlans();
+  },
+
+  /* ================= 天气 ================= */
+  async locate(){
+    const hero = $('wxHero');
+    hero.querySelector('.city').textContent = '正在按 IP 定位…';
+    let city = null;
+    try { const r = await fetch('https://ipapi.co/json/'); const d = await r.json(); if (d.city) city = d.city; } catch {}
+    if (!city) { try { const r = await fetch('https://ip-api.com/json/?lang=zh-CN'); const d = await r.json(); if (d.status === 'success') city = d.city; } catch {} }
+    if (!city){ hero.querySelector('.city').textContent = '定位失败'; return; }
+    const s = DB.get('settings', {});
+    s.city = city; DB.set('settings', s);
+    $('sCity').value = city;
+    this.weather();
+  },
+  async weather(){
+    const s = DB.get('settings', {});
+    const city = s.city || '北京';
+    const hero = $('wxHero');
+    try{
+      const geo = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=zh`)).json();
+      if (!geo.results?.length) throw new Error('找不到城市');
+      const loc = geo.results[0];
+      const w = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FShanghai`)).json();
+      const c = w.current;
+      const wm = {0:'晴',1:'基本晴朗',2:'局部多云',3:'阴天',45:'雾',48:'雾凇',51:'毛毛雨',53:'小毛毛雨',55:'毛毛雨',61:'小雨',63:'中雨',65:'大雨',71:'小雪',73:'中雪',75:'大雪',80:'阵雨',81:'强阵雨',82:'暴雨',95:'雷阵雨'};
+      const desc = wm[c.weather_code] || '多云';
+      const icon = c.weather_code === 0 ? '☀️' : (c.weather_code >= 61 ? '🌧️' : (c.weather_code >= 71 ? '❄️' : '⛅'));
+      hero.querySelector('.city').textContent = `${loc.name} · ${desc}`;
+      hero.querySelector('.deg').textContent = `${icon} ${Math.round(c.temperature_2m)}°`;
+      hero.querySelector('.desc').textContent = desc;
+      hero.querySelector('#wxMeta').innerHTML = `
+        <span>体感 ${Math.round(c.apparent_temperature)}°</span>
+        <span>湿度 ${c.relative_humidity_2m}%</span>
+        <span>今日 ${Math.round(w.daily.temperature_2m_min[0])}°~${Math.round(w.daily.temperature_2m_max[0])}°</span>
+        <span>风 ${c.wind_speed_10m} km/h</span>`;
+    }catch(e){
+      hero.querySelector('.city').textContent = '加载失败';
+      hero.querySelector('.deg').textContent = '--°';
+      hero.querySelector('.desc').textContent = e.message;
+    }
+  },
+
+  /* ================= AI 对话 ================= */
+  renderChats(){
+    const tabs = $('chatTabs');
+    const keys = Object.keys(this.chats || {});
+    let html = '<button class="new" onclick="App.newChat()">＋ 新对话</button>';
+    keys.forEach((k,i) => {
+      const first = (this.chats[k].messages.find(m => m.role === 'user')?.content || '新对话').slice(0, 8);
+      html += `<button class="${i === this.chatIdx ? 'on' : ''}" onclick="App.switchChat(${i})">${esc(first)}</button>`;
+    });
+    tabs.innerHTML = html;
+    this.renderMessages();
+  },
+  switchChat(i){
+    this.chatIdx = i; this.renderChats();
+  },
+  newChat(){
+    const id = 'c' + Date.now();
+    if (!this.chats) this.chats = {};
+    this.chats[id] = { messages: [] };
+    this.chatIdx = Object.keys(this.chats).length - 1;
+    this.renderChats();
+  },
+  renderMessages(){
+    const box = $('chatBox');
+    const keys = Object.keys(this.chats || {});
+    if (!keys.length){ this.newChat(); return; }
+    const msgs = this.chats[keys[this.chatIdx]].messages;
+    if (!msgs.length){ box.innerHTML = '<div class="empty">输入问题开始对话 ✨</div>'; return; }
+    box.innerHTML = msgs.map(m => `
+      <div class="msg ${m.role === 'user' ? 'me' : 'ai'}">
+        <div class="b">${esc(m.content)}</div>
+      </div>`).join('');
+    box.scrollTop = box.scrollHeight;
+  },
+  async send(){
+    if (this.sending) return;
+    const inp = $('aiInp');
+    const text = inp.value.trim();
+    if (!text) return;
+    const s = DB.get('settings', {});
+    if (!s.apiKey){ alert('请先在 我的 → 设置 中填写 API Key'); this.go('me'); return; }
+    const keys = Object.keys(this.chats);
+    const chat = this.chats[keys[this.chatIdx]];
+    chat.messages.push({ role: 'user', content: text });
+    inp.value = '';
+    this.sending = true;
+    $('aiSend').disabled = true;
+    this.renderMessages();
+    chat.messages.push({ role: 'assistant', content: '' });
+    const box = $('chatBox');
+    const msgs = chat.messages;
+    const idx = msgs.length - 1;
+    box.insertAdjacentHTML('beforeend', `<div class="msg ai" id="streamMsg"><div class="b"></div></div>`);
+    const el = box.querySelector('#streamMsg .b');
+    box.scrollTop = box.scrollHeight;
+    try{
+      const res = await fetch((s.baseUrl || 'https://api.deepseek.com/v1').replace(/\/+$/,'') + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.apiKey },
+        body: JSON.stringify({ model: s.model || 'deepseek-chat', messages: chat.messages.slice(0, -1), stream: true, temperature: 0.4 })
+      });
+      if (!res.ok){
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error?.message || '请求失败 ' + res.status);
+      }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '', full = '';
+      while(true){
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n'); buf = lines.pop();
+        for (const line of lines){
+          const t = line.trim();
+          if (!t.startsWith('data:')) continue;
+          const d = t.slice(5).trim();
+          if (d === '[DONE]') continue;
+          try{
+            const j = JSON.parse(d);
+            const delta = j.choices?.[0]?.delta?.content || '';
+            if (delta){ full += delta; el.textContent = full; box.scrollTop = box.scrollHeight; }
+          }catch{}
+        }
+      }
+      msgs[idx] = { role: 'assistant', content: full || '(无回复)' };
+      el.textContent = msgs[idx].content;
+      DB.set('chats', this.chats);
+    }catch(e){
+      msgs[idx] = { role: 'assistant', content: '请求失败：' + e.message };
+      el.textContent = msgs[idx].content;
+      DB.set('chats', this.chats);
+    }finally{
+      this.sending = false;
+      $('aiSend').disabled = false;
+    }
+  },
+
+  /* ================= 设置 / 微信 ================= */
+  openSet(){
+    const s = DB.get('settings', {});
+    $('sKey').value = s.apiKey || '';
+    $('sBase').value = s.baseUrl || '';
+    $('sModel').value = s.model || '';
+    $('sCity').value = s.city || '';
+    this.openSheet('setSheet');
+  },
+  saveSet(){
+    DB.set('settings', { apiKey: $('sKey').value.trim(), baseUrl: $('sBase').value.trim(), model: $('sModel').value.trim(), city: $('sCity').value.trim() });
+    const st = $('setStat');
+    st.textContent = '✓ 已保存'; st.className = 'stat ok';
+    setTimeout(() => { this.closeSheet('setSheet'); st.textContent = ''; st.className = 'stat'; }, 800);
+  },
+  openWx(){
+    window.open('https://wx.qq.com', '_blank');
+    this.closeSheet('wxSheet');
+  },
+
+  /* ================= 网络 ================= */
+  async checkNet(){
+    const pill = $('netPill');
+    try{
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 5000);
+      await fetch('https://www.baidu.com', { method: 'HEAD', signal: ctrl.signal });
+      clearTimeout(t);
+      pill.textContent = '● 在线'; pill.className = 'pill on';
+    }catch{
+      pill.textContent = '○ 离线'; pill.className = 'pill off';
+    }
+  }
+};
+
+/* 回车发送 / 换行 */
+$('aiInp').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); App.send(); }
+});
+$('todoInp').addEventListener('keydown', e => { if (e.key === 'Enter') App.addTodo(); });
+$('planInp').addEventListener('keydown', e => { if (e.key === 'Enter') App.addPlan(); });
+
+/* 注册 Service Worker（离线可用） */
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+App.init();
+</script>
+</body>
+</html>

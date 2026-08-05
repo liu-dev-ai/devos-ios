@@ -1,0 +1,10 @@
+{
+  "appId": "com.devos.mobile",
+  "appName": "DevOS",
+  "webDir": "www",
+  "backgroundColor": "#0b0b12",
+  "ios": {
+    "scheme": "App",
+    "contentInset": "automatic"
+  }
+}
