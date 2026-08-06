@@ -896,7 +896,10 @@ const App = {
   openSync(){
     const s = DB.get('settings', {});
     $('syncUrlInp').value = s.syncUrl || '';
-    $('syncStat').textContent = '当前同步地址：' + this.syncBase();
+    const base = this.syncBase();
+    $('syncStat').textContent = base
+      ? '当前同步地址：' + base
+      : '请在上方填写电脑同步地址（如 http://192.168.1.7:8080）';
     $('syncStat').className = 'stat';
     this.openSheet('syncSheet');
   },
@@ -926,12 +929,22 @@ const App = {
   },
 
   /* ================= 数据同步（手机 ⇄ 电脑） ================= */
-  /* 同步服务器地址：PWA 从电脑加载时用同源；独立 App 可手动设置电脑 IP */
+  /* 同步服务器地址：PWA 从电脑加载时用同源；独立 App 必须手动设置电脑 IP */
   syncBase(){
     const s = DB.get('settings', {});
     const custom = (s.syncUrl || '').trim().replace(/\/+$/, '');
     if (custom) return custom;
-    return location.origin; // PWA 同源模式
+    // 仅 http/https 下可用同源；App 内（capacitor://、file:// 等）必须手动配置
+    if (location.protocol === 'http:' || location.protocol === 'https:') return location.origin;
+    return ''; // 未配置，同步将跳过
+  },
+  /* 带超时的 fetch（原生 fetch 不支持 timeout 选项） */
+  async fetchTimeout(url, opts = {}){
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), opts.timeout || 6000);
+    try {
+      return await fetch(url, Object.assign({}, opts, { signal: ctrl.signal }));
+    } finally { clearTimeout(t); }
   },
   /* 自动同步引擎：登录后开启，每 20 秒与电脑双向同步（电脑为权威源，按 updatedAt 合并） */
   startAutoSync(){
@@ -940,10 +953,12 @@ const App = {
     this._lastRemoteAt = 0;
     const tick = async () => {
       if (!this.isLoggedIn()) { setTimeout(tick, 20000); return; }
+      const base = this.syncBase();
+      if (!base){ setTimeout(tick, 20000); return; } // App 未配置同步地址，等待配置
       try{
-        const url = this.syncBase() + '/api/sync';
+        const url = base + '/api/sync';
         // 1. 拉取远端最新数据（电脑权威）
-        const r = await fetch(url, { timeout: 6000 });
+        const r = await this.fetchTimeout(url, { timeout: 6000 });
         if (!r.ok) throw 0;
         const remote = await r.json();
         if (remote && remote.updatedAt && remote.updatedAt !== this._lastRemoteAt){
@@ -999,7 +1014,7 @@ const App = {
       plans: plans.map(p => ({ id: p.id, month: p.month, text: p.text, done: p.done }))
     };
     const url = this.syncBase() + '/api/sync';
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), timeout: 6000 });
+    const r = await this.fetchTimeout(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), timeout: 6000 });
     if (!r.ok) throw 0;
     const meta = DB.get('meta', {});
     meta.updatedAt = payload.updatedAt;
@@ -1016,9 +1031,10 @@ const App = {
     const st = $('syncStat');
     try{
       this.saveSyncUrl();
+      if (!this.syncBase()) throw new Error('请先填写电脑同步地址');
       const url = this.syncBase() + '/api/sync';
       st.textContent = '正在从电脑拉取…'; st.className = 'stat';
-      const r = await fetch(url, { timeout: 8000 });
+      const r = await this.fetchTimeout(url, { timeout: 8000 });
       if (!r.ok) throw new Error('服务器返回 ' + r.status);
       const d = await r.json();
       if (!d || !d.todos) throw new Error('同步数据格式不正确');
@@ -1038,6 +1054,7 @@ const App = {
     const st = $('syncStat');
     try{
       this.saveSyncUrl();
+      if (!this.syncBase()) throw new Error('请先填写电脑同步地址');
       const todos = DB.get('todos', []);
       const courses = DB.get('courses', []);
       const plans = DB.get('plans', []);
@@ -1049,7 +1066,7 @@ const App = {
       };
       st.textContent = '正在推送到电脑…'; st.className = 'stat';
       const url = this.syncBase() + '/api/sync';
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), timeout: 8000 });
+      const r = await this.fetchTimeout(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), timeout: 8000 });
       if (!r.ok) throw new Error('服务器返回 ' + r.status);
       st.textContent = '✓ 已推送到电脑（电脑端点"从手机同步"导入）'; st.className = 'stat ok';
     }catch(e){
