@@ -926,6 +926,13 @@ const App = {
   },
 
   /* ================= 数据同步（手机 ⇄ 电脑） ================= */
+  /* 同步服务器地址：PWA 从电脑加载时用同源；独立 App 可手动设置电脑 IP */
+  syncBase(){
+    const s = DB.get('settings', {});
+    const custom = (s.syncUrl || '').trim().replace(/\/+$/, '');
+    if (custom) return custom;
+    return location.origin; // PWA 同源模式
+  },
   /* 自动同步引擎：登录后开启，每 20 秒与电脑双向同步（电脑为权威源，按 updatedAt 合并） */
   startAutoSync(){
     if (this._autoSyncOn) return;
