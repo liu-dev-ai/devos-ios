@@ -545,6 +545,7 @@ const App = {
     } else {
       $('loginMask').style.display = 'none';
       this.renderMe();
+      this.startAutoSync(); // 已登录态启动自动同步
     }
   },
 
@@ -570,6 +571,7 @@ const App = {
       $('loginPass').value = '';
       $('loginMask').style.display = 'none';
       this.renderMe();
+      this.startAutoSync(); // 登录后启动自动同步
     }catch(e){ stat.textContent = e.message; stat.className = 'stat err'; }
   },
 
@@ -605,6 +607,7 @@ const App = {
   logout(){
     const a = DB.get('auth', null);
     if (a){ a.at = 0; DB.set('auth', a); }
+    this._autoSyncOn = false; // 停止自动同步
     this.checkLogin();
   },
 
@@ -639,19 +642,20 @@ const App = {
     const v = $('todoInp').value.trim();
     if (!v) return;
     const todos = DB.get('todos', []);
-    todos.unshift({ text: v, date: today(), done: false, pri: '中' });
+    todos.unshift({ id: Date.now() + '-' + Math.floor(Math.random()*1e6), text: v, date: today(), done: false, pri: '中' });
     DB.set('todos', todos);
+    this.markChanged();
     $('todoInp').value = '';
     this.renderTodos();
   },
   toggleTodo(i){
     const todos = DB.get('todos', []);
     todos[i].done = !todos[i].done;
-    DB.set('todos', todos); this.renderTodos();
+    DB.set('todos', todos); this.markChanged(); this.renderTodos();
   },
   delTodo(i){
     const todos = DB.get('todos', []);
-    todos.splice(i,1); DB.set('todos', todos); this.renderTodos();
+    todos.splice(i,1); DB.set('todos', todos); this.markChanged(); this.renderTodos();
   },
 
   /* ================= 课程 ================= */
@@ -680,15 +684,16 @@ const App = {
     if (!name){ alert('请输入课程名称'); return; }
     const day = document.querySelector('#cDay button.on').dataset.d;
     const courses = DB.get('courses', []);
-    courses.push({ name, day: Number(day), time: $('cTime').value.trim(), loc: $('cLoc').value.trim() });
+    courses.push({ id: Date.now() + '-' + Math.floor(Math.random()*1e6), name, day: Number(day), time: $('cTime').value.trim(), loc: $('cLoc').value.trim() });
     DB.set('courses', courses);
+    this.markChanged();
     $('cName').value = ''; $('cTime').value = ''; $('cLoc').value = '';
     this.closeSheet('courseSheet');
     this.renderCourses();
   },
   delCourse(i){
     const courses = DB.get('courses', []);
-    courses.splice(i,1); DB.set('courses', courses); this.renderCourses();
+    courses.splice(i,1); DB.set('courses', courses); this.markChanged(); this.renderCourses();
   },
 
   /* ================= 计划 ================= */
@@ -717,18 +722,19 @@ const App = {
     const plans = DB.get('plans', []);
     plans.unshift({ id: Date.now() + '-' + Math.floor(Math.random()*1e6), month: this.currentMonth(), text: v, done: false });
     DB.set('plans', plans);
+    this.markChanged();
     $('planInp').value = '';
     this.renderPlans();
   },
   togglePlan(id){
     const plans = DB.get('plans', []);
     const p = plans.find(x => String(x.id) === String(id));
-    if (p) { p.done = !p.done; DB.set('plans', plans); this.renderPlans(); }
+    if (p) { p.done = !p.done; DB.set('plans', plans); this.markChanged(); this.renderPlans(); }
   },
   delPlan(id){
     const plans = DB.get('plans', []);
     DB.set('plans', plans.filter(x => String(x.id) !== String(id)));
-    this.renderPlans();
+    this.markChanged(); this.renderPlans();
   },
 
   /* ================= 天气 ================= */
@@ -920,12 +926,84 @@ const App = {
   },
 
   /* ================= 数据同步（手机 ⇄ 电脑） ================= */
-  /* 同步服务器地址：PWA 从电脑加载时用同源；独立 App 可手动设置电脑 IP */
-  syncBase(){
-    const s = DB.get('settings', {});
-    const custom = (s.syncUrl || '').trim().replace(/\/+$/, '');
-    if (custom) return custom;
-    return location.origin; // PWA 同源模式
+  /* 自动同步引擎：登录后开启，每 20 秒与电脑双向同步（电脑为权威源，按 updatedAt 合并） */
+  startAutoSync(){
+    if (this._autoSyncOn) return;
+    this._autoSyncOn = true;
+    this._lastRemoteAt = 0;
+    const tick = async () => {
+      if (!this.isLoggedIn()) { setTimeout(tick, 20000); return; }
+      try{
+        const url = this.syncBase() + '/api/sync';
+        // 1. 拉取远端最新数据（电脑权威）
+        const r = await fetch(url, { timeout: 6000 });
+        if (!r.ok) throw 0;
+        const remote = await r.json();
+        if (remote && remote.updatedAt && remote.updatedAt !== this._lastRemoteAt){
+          this._lastRemoteAt = remote.updatedAt;
+          // 2. 合并：若本地比远端新则推送，否则应用远端
+          const localUpdated = DB.get('meta', {}).updatedAt || 0;
+          if (remote.updatedAt >= localUpdated){
+            this.applyRemote(remote);
+          }
+        }
+        // 3. 若本地有更新且远端较旧，推送本地
+        const localUpdated = DB.get('meta', {}).updatedAt || 0;
+        if (remote && localUpdated > (remote.updatedAt || 0)){
+          await this.pushAll();
+        }
+      }catch(e){ /* 离线或电脑未开机：静默，下次再试 */ }
+      setTimeout(tick, 20000);
+    };
+    tick();
+  },
+  isLoggedIn(){ const a = DB.get('auth', null); return !!(a && a.at); },
+  applyRemote(remote){
+    const changed = { todos: false, courses: false, plans: false };
+    const todos = DB.get('todos', []);
+    if (JSON.stringify(remote.todos || []) !== JSON.stringify(todos.map(t => ({ id: t.id, text: t.text, done: t.done, prio: t.prio, date: t.date })))){
+      DB.set('todos', (remote.todos || []).map(t => ({ id: t.id, text: t.text, done: !!t.done, prio: t.prio || '中', date: t.date || '' })));
+      changed.todos = true;
+    }
+    const courses = DB.get('courses', []);
+    const remoteCourses = (remote.courses || []).map(c => ({ id: c.id, name: c.name, day: c.day, time: c.time || '', loc: c.place || c.loc || '' }));
+    if (JSON.stringify(remoteCourses) !== JSON.stringify(courses.map(c => ({ id: c.id, name: c.name, day: c.day, time: c.time || '', loc: c.loc || '' })))){
+      DB.set('courses', remoteCourses); changed.courses = true;
+    }
+    const plans = DB.get('plans', []);
+    const remotePlans = (remote.plans || []).map(p => ({ id: p.id, month: p.month || '', text: p.text, done: !!p.done }));
+    if (JSON.stringify(remotePlans) !== JSON.stringify(plans.map(p => ({ id: p.id, month: p.month || '', text: p.text, done: !!p.done })))){
+      DB.set('plans', remotePlans); changed.plans = true;
+    }
+    if (changed.todos || changed.courses || changed.plans){
+      this.renderTodos(); this.renderCourses(); this.renderPlans();
+      const st = $('syncStat');
+      if (st && st.textContent.indexOf('自动同步') < 0) st.textContent = '已自动同步电脑数据';
+    }
+  },
+  async pushAll(){
+    const todos = DB.get('todos', []);
+    const courses = DB.get('courses', []);
+    const plans = DB.get('plans', []);
+    const payload = {
+      updatedAt: Date.now(),
+      todos: todos.map(t => ({ id: t.id, text: t.text, done: t.done, prio: t.prio, date: t.date })),
+      courses: courses.map(c => ({ id: c.id, name: c.name, day: c.day, time: c.time, place: c.loc || c.place || '' })),
+      plans: plans.map(p => ({ id: p.id, month: p.month, text: p.text, done: p.done }))
+    };
+    const url = this.syncBase() + '/api/sync';
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), timeout: 6000 });
+    if (!r.ok) throw 0;
+    const meta = DB.get('meta', {});
+    meta.updatedAt = payload.updatedAt;
+    DB.set('meta', meta);
+    return true;
+  },
+  /* 本地数据变更时调用：标记元数据并触发自动推送 */
+  markChanged(){
+    const meta = DB.get('meta', {});
+    meta.updatedAt = Date.now();
+    DB.set('meta', meta);
   },
   async syncPull(){
     const st = $('syncStat');
