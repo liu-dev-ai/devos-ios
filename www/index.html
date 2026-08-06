@@ -311,6 +311,9 @@
         <a class="link-row" href="javascript:void(0)" id="setLink">
           <span class="ic" style="background:rgba(10,132,255,.15)">⚙️</span> 设置（API Key / 城市） <span class="ar">›</span>
         </a>
+        <a class="link-row" href="javascript:void(0)" id="syncLink">
+          <span class="ic" style="background:rgba(48,209,88,.15)">🔄</span> 数据同步（手机 ⇄ 电脑） <span class="ar">›</span>
+        </a>
         <a class="link-row" href="javascript:void(0)" onclick="App.openSheet('wxSheet')">
           <span class="ic" style="background:rgba(7,193,96,.15)">💬</span> 登录微信网页版 <span class="ar">›</span>
         </a>
@@ -430,6 +433,21 @@
     </div>
   </div>
 
+  <!-- 数据同步弹层 -->
+  <div class="sheet" id="syncSheet" onclick="if(event.target===this)App.closeSheet('syncSheet')">
+    <div class="box">
+      <h3>🔄 数据同步</h3>
+      <p class="hint" style="margin-bottom:10px">手机与电脑连接<b>同一 Wi-Fi</b>，且电脑上已启动「启动手机版.bat」服务器时，可双向同步待办、课程、计划。</p>
+      <label class="lb">同步地址（自动模式可留空）</label>
+      <input class="inp" id="syncUrlInp" placeholder="http://192.168.1.7:8080">
+      <div class="stat" id="syncStat"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn" style="flex:1" onclick="App.syncPull()">从电脑拉取</button>
+        <button class="btn" style="flex:1" onclick="App.syncPush()">推送到电脑</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -494,6 +512,7 @@ const App = {
     });
     this.chats = DB.get('chats', {});
     $('setLink').addEventListener('click', () => this.openSet());
+    $('syncLink').addEventListener('click', () => this.openSync());
     await this.checkLogin();
     this.checkNet();
     setInterval(() => this.checkNet(), 60000);
@@ -673,36 +692,43 @@ const App = {
   },
 
   /* ================= 计划 ================= */
+  currentMonth(){
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  },
   renderPlans(){
     const plans = DB.get('plans', []);
     const now = new Date();
     $('planMonth').textContent = now.getFullYear() + ' 年 ' + (now.getMonth()+1) + ' 月';
     const list = $('planList');
-    if (!plans.length){ list.innerHTML = '<div class="empty">暂无计划</div>'; return; }
-    list.innerHTML = plans.map((p,i) => `
+    const month = this.currentMonth();
+    const show = plans.filter(p => !p.month || p.month === month);
+    if (!show.length){ list.innerHTML = '<div class="empty">本月暂无计划</div>'; return; }
+    list.innerHTML = show.map(p => `
       <div class="plan ${p.done?'done':''}">
-        <div class="ck" onclick="App.togglePlan(${i})">✓</div>
+        <div class="ck" onclick="App.togglePlan('${p.id}')">✓</div>
         <span class="tx">${esc(p.text)}</span>
-        <button class="del" onclick="App.delPlan(${i})">✕</button>
+        <button class="del" onclick="App.delPlan('${p.id}')">✕</button>
       </div>`).join('');
   },
   addPlan(){
     const v = $('planInp').value.trim();
     if (!v) return;
     const plans = DB.get('plans', []);
-    plans.unshift({ text: v, done: false });
+    plans.unshift({ id: Date.now() + '-' + Math.floor(Math.random()*1e6), month: this.currentMonth(), text: v, done: false });
     DB.set('plans', plans);
     $('planInp').value = '';
     this.renderPlans();
   },
-  togglePlan(i){
+  togglePlan(id){
     const plans = DB.get('plans', []);
-    plans[i].done = !plans[i].done;
-    DB.set('plans', plans); this.renderPlans();
+    const p = plans.find(x => String(x.id) === String(id));
+    if (p) { p.done = !p.done; DB.set('plans', plans); this.renderPlans(); }
   },
-  delPlan(i){
+  delPlan(id){
     const plans = DB.get('plans', []);
-    plans.splice(i,1); DB.set('plans', plans); this.renderPlans();
+    DB.set('plans', plans.filter(x => String(x.id) !== String(id)));
+    this.renderPlans();
   },
 
   /* ================= 天气 ================= */
@@ -854,10 +880,24 @@ const App = {
     this.openSheet('setSheet');
   },
   saveSet(){
-    DB.set('settings', { apiKey: $('sKey').value.trim(), baseUrl: $('sBase').value.trim(), model: $('sModel').value.trim(), city: $('sCity').value.trim() });
+    DB.set('settings', { apiKey: $('sKey').value.trim(), baseUrl: $('sBase').value.trim(), model: $('sModel').value.trim(), city: $('sCity').value.trim(), syncUrl: DB.get('settings',{}).syncUrl || '' });
     const st = $('setStat');
     st.textContent = '✓ 已保存'; st.className = 'stat ok';
     setTimeout(() => { this.closeSheet('setSheet'); st.textContent = ''; st.className = 'stat'; }, 800);
+  },
+
+  /* ================= 同步弹层 ================= */
+  openSync(){
+    const s = DB.get('settings', {});
+    $('syncUrlInp').value = s.syncUrl || '';
+    $('syncStat').textContent = '当前同步地址：' + this.syncBase();
+    $('syncStat').className = 'stat';
+    this.openSheet('syncSheet');
+  },
+  saveSyncUrl(){
+    const s = DB.get('settings', {});
+    s.syncUrl = $('syncUrlInp').value.trim();
+    DB.set('settings', s);
   },
   openWx(){
     window.open('https://wx.qq.com', '_blank');
@@ -868,15 +908,69 @@ const App = {
   async checkNet(){
     const pill = $('netPill');
     try{
+      // 用 no-cors 探测：跨域探测不会被 CORS 拦截，网络正常即返回 opaque 成功
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 5000);
-      await fetch('https://www.baidu.com', { method: 'HEAD', signal: ctrl.signal });
+      await fetch('https://www.baidu.com/favicon.ico', { method: 'GET', mode: 'no-cors', signal: ctrl.signal });
       clearTimeout(t);
       pill.textContent = '● 在线'; pill.className = 'pill on';
     }catch{
       pill.textContent = '○ 离线'; pill.className = 'pill off';
     }
-  }
+  },
+
+  /* ================= 数据同步（手机 ⇄ 电脑） ================= */
+  /* 同步服务器地址：PWA 从电脑加载时用同源；独立 App 可手动设置电脑 IP */
+  syncBase(){
+    const s = DB.get('settings', {});
+    const custom = (s.syncUrl || '').trim().replace(/\/+$/, '');
+    if (custom) return custom;
+    return location.origin; // PWA 同源模式
+  },
+  async syncPull(){
+    const st = $('syncStat');
+    try{
+      this.saveSyncUrl();
+      const url = this.syncBase() + '/api/sync';
+      st.textContent = '正在从电脑拉取…'; st.className = 'stat';
+      const r = await fetch(url, { timeout: 8000 });
+      if (!r.ok) throw new Error('服务器返回 ' + r.status);
+      const d = await r.json();
+      if (!d || !d.todos) throw new Error('同步数据格式不正确');
+      // 待办：id/prio/date 字段已统一，直接覆盖
+      DB.set('todos', d.todos.map(t => ({ id: t.id || Date.now() + Math.random(), text: t.text, done: !!t.done, prio: t.prio || '中', date: t.date || today() })));
+      // 课程：place → loc
+      DB.set('courses', (d.courses || []).map(c => ({ id: c.id || Date.now() + Math.random(), name: c.name, day: c.day, time: c.time || '', loc: c.place || c.loc || '' })));
+      // 计划：按月存数组
+      DB.set('plans', (d.plans || []).map(p => ({ id: p.id || Date.now() + Math.random(), month: p.month || '', text: p.text, done: !!p.done })));
+      this.renderTodos(); this.renderCourses(); this.renderPlans();
+      st.textContent = '✓ 已从电脑同步（待办/课程/计划）'; st.className = 'stat ok';
+    }catch(e){
+      st.textContent = '同步失败：' + e.message; st.className = 'stat err';
+    }
+  },
+  async syncPush(){
+    const st = $('syncStat');
+    try{
+      this.saveSyncUrl();
+      const todos = DB.get('todos', []);
+      const courses = DB.get('courses', []);
+      const plans = DB.get('plans', []);
+      const payload = {
+        updatedAt: Date.now(),
+        todos: todos.map(t => ({ id: t.id, text: t.text, done: t.done, prio: t.prio, date: t.date })),
+        courses: courses.map(c => ({ id: c.id, name: c.name, day: c.day, time: c.time, place: c.loc || c.place || '' })),
+        plans: plans.map(p => ({ id: p.id, month: p.month, text: p.text, done: p.done }))
+      };
+      st.textContent = '正在推送到电脑…'; st.className = 'stat';
+      const url = this.syncBase() + '/api/sync';
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), timeout: 8000 });
+      if (!r.ok) throw new Error('服务器返回 ' + r.status);
+      st.textContent = '✓ 已推送到电脑（电脑端点"从手机同步"导入）'; st.className = 'stat ok';
+    }catch(e){
+      st.textContent = '同步失败：' + e.message; st.className = 'stat err';
+    }
+  },
 };
 
 /* 回车发送 / 换行 */
