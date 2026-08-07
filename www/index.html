@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="DevOS">
 <meta name="theme-color" content="#0b0b12">
 <meta name="description" content="DevOS 手机版 - 个人学习与工作助手">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="manifest" href="manifest.json">
 <title>DevOS</title>
@@ -37,6 +38,7 @@
     background:linear-gradient(135deg,var(--brand),var(--brand2));
     display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:#fff;
   }
+  img.logo{object-fit:cover}
   .head .tt{font-size:17px;font-weight:700;letter-spacing:-.02em}
   .head .sub{font-size:11px;color:var(--ink3);margin-top:1px}
   .head .pill{
@@ -181,6 +183,7 @@
     background:linear-gradient(135deg,var(--brand),var(--brand2));
     display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800;color:#fff;
   }
+  .login-mask img.big-logo{object-fit:cover}
   .login-mask h2{font-size:21px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
   .login-mask .sub{font-size:13px;color:var(--ink2);margin-bottom:26px;text-align:center;line-height:1.6}
   .login-mask .card{width:100%;max-width:360px;padding:20px}
@@ -204,7 +207,7 @@
 
   <!-- 顶部 -->
   <div class="head">
-    <div class="logo">D</div>
+    <img class="logo" src="icon.png" alt="DevOS">
     <div>
       <div class="tt" id="pageTitle">首页</div>
       <div class="sub" id="pageSub">DevOS 手机版</div>
@@ -352,7 +355,7 @@
 
   <!-- 登录遮罩 -->
   <div class="login-mask" id="loginMask">
-    <div class="big-logo">D</div>
+    <img class="big-logo" src="icon.png" alt="DevOS">
     <h2 id="loginTitle">欢迎使用 DevOS</h2>
     <p class="sub" id="loginSub">首次使用请设置密码</p>
     <div class="card">

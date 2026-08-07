@@ -1,6 +1,6 @@
 /* DevOS Mobile Service Worker - 离线缓存 */
-const CACHE = 'devos-mobile-v1';
-const ASSETS = ['./', './index.html', './manifest.json', './icon.png', './icon.svg'];
+const CACHE = 'devos-mobile-v2';
+const ASSETS = ['./', './index.html', './manifest.json', './icon.png', './icon-180.png', './icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
