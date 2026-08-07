@@ -25,14 +25,22 @@ jobs:
         run: npx cap sync ios
 
       # 替换 App 主屏图标为 DevOS 新图标（D + 光标设计）
+      # 注意：使用 GITHUB_WORKSPACE 绝对路径，避免相对路径层级错误
       - name: Replace app icons
         run: |
           cd ios/App/App/Assets.xcassets/AppIcon.appiconset
-          python3 - <<'PY'
-          import json, os, subprocess, glob
-          SRC = os.path.abspath('../../../../../../app-icon-1024.png')
+          pwd
+          ls -la
+          python3 <<'PY'
+          import json, os, subprocess
+          SRC = os.path.join(os.environ.get('GITHUB_WORKSPACE', '.'), 'app-icon-1024.png')
+          print('SRC =', SRC)
+          print('SRC exists =', os.path.exists(SRC))
+          if not os.path.exists(SRC):
+              raise SystemExit('source icon not found')
           with open('Contents.json', 'r', encoding='utf-8') as f:
               data = json.load(f)
+          n = 0
           for img in data.get('images', []):
               fn = img.get('filename')
               if not fn:
@@ -41,9 +49,13 @@ jobs:
               scale = int(img.get('scale', '1x').replace('x', ''))
               px = int(size[0]) * scale
               out = os.path.join(os.getcwd(), fn)
-              subprocess.run(['sips', '-z', str(px), str(px), SRC, '--out', out], check=True, capture_output=True)
-              print('generated', fn, px, 'x', px)
-          print('AppIcon replaced OK')
+              r = subprocess.run(['sips', '-z', str(px), str(px), SRC, '--out', out], capture_output=True, text=True)
+              print('sips', fn, px, 'rc=', r.returncode)
+              if r.returncode != 0:
+                  print(r.stderr.strip()[:300])
+                  raise SystemExit('sips failed for ' + fn)
+              n += 1
+          print('AppIcon replaced OK, total', n)
           PY
 
       # 编译（不做签名，只生成 Release-iphoneos/App.app）
